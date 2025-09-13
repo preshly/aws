@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Deploy an EC2 web server with Apache using Ubuntu with explicit network interface in the default subnet
+
+Mappings:
+  AMIRegionMap:
+    us-east-1:
+      AMI: ami-0360c520857e3138f
+    ap-south-1:
+      AMI: ami-02d26659fd82cf299
+
+Parameters:
+  SubnetId:
+    Type: String
+    Description: Subnet to launch the instance in
+  KeyName:
+    Type: String
+    Description: Key name for the web server instance SSH access
+
+Resources:
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH and HTTP access
+      GroupName: web-server-security-group
+      VpcId: !Ref AWS::NoValue
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  WebServerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap [AMIRegionMap, !Ref "AWS::Region", AMI]
+      InstanceType: t3.micro
+      KeyName: !Ref KeyName
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          GroupSet:
+            - !GetAtt WebServerSecurityGroup.GroupId
+          SubnetId: !Ref SubnetId
+      Tags:
+        - Key: Name
+          Value: web-server
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          sudo apt-get update -y
+          sudo apt-get install -y apache2
+          sudo systemctl enable apache2
+          sudo systemctl start apache2
+
+Outputs:
+  WebsiteURL:
+    Description: URL of the web server
+    Value: !Sub "http://${WebServerInstance.PublicIp}"
