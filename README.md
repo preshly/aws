@@ -6,7 +6,8 @@ A collection of hands-on experiments and deployment templates for AWS.
 
 Each folder focuses on AWS services or use case:
 
-- **EC2/**: Deploying and debugging web servers and network issues.
+- **ec2/**: Deploying and debugging web servers and network issues.
+- **ses/**: Configuring and sending emails with Amazon Simple Email Service.
 - _(More coming soon as I learn and break things)_
 
 ## How to Use 🛠️
