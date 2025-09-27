@@ -1,2 +1,9 @@
 
 # Set up ignore rules for Git.
+
+# Ignore code deployment files
+*package.yaml
+*publish.zip
+
+# Ignore Lambda invocation response files
+*response.json

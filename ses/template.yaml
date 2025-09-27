@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: Template to deploy backup notification stack using Lambda to back up a GitHub repo, store in S3, and send email notification using SES.
+
+Parameters:
+  GitHubRepo:
+    Type: String
+    Description: The GitHub repo to backup (e.g., owner/repo)
+
+  GitHubBranch:
+    Type: String
+    Default: main
+    Description: The branch to back up
+
+  S3Bucket:
+    Type: String
+    Description: The S3 bucket name to store the backups
+
+  SesSenderEmail:
+    Type: String
+    Description: The verified SES sender email address
+
+  SesRecipients:
+    Type: String
+    Description: Comma-separated list of SES verified recipient email addresses
+
+Resources:
+  GitHubBackupBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref S3Bucket
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  GitHubBackupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: github-backup-lambda-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: github-backup-lambda-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Sid: AllowS3BucketWrite
+                Effect: Allow
+                Action: "s3:PutObject"
+                Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
+
+              - Sid: AllowSESSendEmail
+                Effect: Allow
+                Action: "ses:SendEmail"
+                Resource: "*"
+
+              - Sid: AllowCloudWatchLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/github-backup-function:*"
+
+  BackupLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: github-backup-function
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.12
+      Timeout: 30
+      MemorySize: 128
+      Role: !GetAtt GitHubBackupLambdaRole.Arn
+      CodeUri: publish.zip
+      Environment:
+        Variables:
+          GITHUB_REPO: !Ref GitHubRepo
+          BRANCH: !Ref GitHubBranch
+          S3_BUCKET: !Ref S3Bucket
+          SES_SENDER_EMAIL: !Ref SesSenderEmail
+          SES_RECIPIENTS: !Ref SesRecipients
