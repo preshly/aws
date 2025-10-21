@@ -8,6 +8,7 @@ Each folder focuses on AWS services or use case:
 
 - **ec2/**: Deploying and debugging web servers and network issues.
 - **ses/**: Configuring and sending emails with Amazon Simple Email Service.
+- **sns/**: Sending notifications with Amazon Simple Notification Service.
 - _(More coming soon as I learn and break things)_
 
 ## How to Use 🛠️

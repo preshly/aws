@@ -1,0 +1,5 @@
+
+# Set up ignore rules for .NET Minimal API project.
+
+*bin
+*obj
