@@ -1,0 +1,6 @@
+@SnsNotificationLambda_HostAddress = http://localhost:5093
+
+GET {{SnsNotificationLambda_HostAddress}}/policy/
+Accept: application/json
+
+###

@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: Infrastructure setup with .NET Minimal API Lambda and SNS notification.
+
+Parameters:
+  SnsSubscriptionEmail:
+    Type: String
+    Description: The email to subscribe for the SNS notification
+
+Resources:
+  SalesLambdaFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: sales-lambda-function-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SalesLambdaFunctionPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref SalesNotificationTopic
+
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/sales-function:*"
+
+  SalesNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: sales-notification-topic
+      TopicName: sales-notification-topic
+
+  SalesNotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !Ref SnsSubscriptionEmail
+      Protocol: email
+      TopicArn: !Ref SalesNotificationTopic
+
+  SalesLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: sales-function
+      Handler: SnsNotificationLambda
+      Runtime: dotnet8
+      Timeout: 30
+      MemorySize: 128
+      Role: !GetAtt SalesLambdaFunctionRole.Arn
+      CodeUri: publish.zip
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref SalesNotificationTopic
+
+  SalesLambdaFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      AuthType: NONE
+      TargetFunctionArn: !GetAtt SalesLambdaFunction.Arn
+
+  SalesLambdaUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunctionUrl
+      FunctionName: !Ref SalesLambdaFunction
+      FunctionUrlAuthType: NONE
+      Principal: "*"
+
+Outputs:
+  LambdaUrl:
+    Description: Sales Lambda Function URL
+    Value: !GetAtt SalesLambdaFunctionUrl.FunctionUrl
