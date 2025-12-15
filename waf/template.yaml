@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: API Gateway with AWS WAFv2 integration to block bad IP.
+
+Parameters:
+  ApiName:
+    Type: String
+    Default: products-api
+  StageName:
+    Type: String
+    Default: prod
+  BlockedIp:
+    Type: String
+    Description: 'The IPv4 CIDR to block (e.g. 203.0.119.45/32).'
+    Default: '203.0.119.45/32'
+
+Resources:
+  ProductsRestAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Ref ApiName
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  ProductsAPIRootMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ProductsRestAPI
+      ResourceId: !GetAtt ProductsRestAPI.RootResourceId
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: |
+                {
+                  "message": "Products API - read the docs for API usage.",
+                  "service": "products"
+                }
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+
+  ProductsAPIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ProductsAPIRootMethod
+    Properties:
+      RestApiId: !Ref ProductsRestAPI
+      StageName: !Ref StageName
+      Description: 'Deployment for products API'
+
+  BlockedIPSet:
+    Type: AWS::WAFv2::IPSet
+    Properties:
+      Name: !Sub '${ApiName}-blocked-ips'
+      Description: 'IP set for blocked IPs'
+      IPAddressVersion: IPV4
+      Scope: REGIONAL
+      Addresses:
+        - !Ref BlockedIp
+
+  ProductsAPIWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${ApiName}-webacl'
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${ApiName}-webacl-metric'
+      Rules:
+        - Name: BlockBadIP
+          Priority: 1
+          Action:
+            Block: {}
+          Statement:
+            IPSetReferenceStatement:
+              Arn: !GetAtt BlockedIPSet.Arn
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: BlockBadIPMetric
+
+  ProductsWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    DependsOn: ProductsAPIDeployment
+    Properties:
+      WebACLArn: !GetAtt ProductsAPIWebACL.Arn
+      ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ProductsRestAPI}/stages/${StageName}'
+
+Outputs:
+  ApiGatewayInvokeURL:
+    Description: 'Invoke URL for the Products API'
+    Value: !Sub 'https://${ProductsRestAPI}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/'
